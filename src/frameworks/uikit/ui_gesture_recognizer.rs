@@ -26,8 +26,8 @@
 use crate::frameworks::core_graphics::{CGFloat, CGPoint};
 use crate::frameworks::foundation::NSInteger;
 use crate::objc::{
-    id, msg_send, nil, objc_classes, release, retain, ClassExports, HostObject, NSZonePtr,
-    SEL,
+    id, impl_HostObject_with_superclass, msg_send, nil, objc_classes, release, retain,
+    ClassExports, HostObject, NSZonePtr, SEL,
 };
 use crate::Environment;
 
@@ -138,10 +138,11 @@ pub fn fire_targets(env: &mut Environment, recognizer: id) {
 
 #[derive(Default)]
 struct UITapGestureRecognizerHostObject {
+    superclass: UIGestureRecognizerHostObject,
     number_of_taps_required: NSInteger,
     number_of_touches_required: NSInteger,
 }
-impl HostObject for UITapGestureRecognizerHostObject {}
+impl_HostObject_with_superclass!(UITapGestureRecognizerHostObject);
 
 // ============================================================================
 // MARK: - UIPanGestureRecognizer host object
@@ -149,12 +150,13 @@ impl HostObject for UITapGestureRecognizerHostObject {}
 
 #[derive(Default)]
 struct UIPanGestureRecognizerHostObject {
+    superclass: UIGestureRecognizerHostObject,
     minimum_number_of_touches: NSInteger,
     maximum_number_of_touches: NSInteger,
     translation: CGPoint,
     velocity: CGPoint,
 }
-impl HostObject for UIPanGestureRecognizerHostObject {}
+impl_HostObject_with_superclass!(UIPanGestureRecognizerHostObject);
 
 // ============================================================================
 // MARK: - UISwipeGestureRecognizer host object
@@ -162,10 +164,11 @@ impl HostObject for UIPanGestureRecognizerHostObject {}
 
 #[derive(Default)]
 struct UISwipeGestureRecognizerHostObject {
+    superclass: UIGestureRecognizerHostObject,
     direction: UISwipeGestureRecognizerDirection,
     number_of_touches_required: NSInteger,
 }
-impl HostObject for UISwipeGestureRecognizerHostObject {}
+impl_HostObject_with_superclass!(UISwipeGestureRecognizerHostObject);
 
 // ============================================================================
 // MARK: - UILongPressGestureRecognizer host object
@@ -173,12 +176,13 @@ impl HostObject for UISwipeGestureRecognizerHostObject {}
 
 #[derive(Default)]
 struct UILongPressGestureRecognizerHostObject {
+    superclass: UIGestureRecognizerHostObject,
     minimum_press_duration: f64,
     allowable_movement: CGFloat,
     number_of_taps_required: NSInteger,
     number_of_touches_required: NSInteger,
 }
-impl HostObject for UILongPressGestureRecognizerHostObject {}
+impl_HostObject_with_superclass!(UILongPressGestureRecognizerHostObject);
 
 // ============================================================================
 // MARK: - Class exports
@@ -373,6 +377,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(UITapGestureRecognizerHostObject {
+        superclass: UIGestureRecognizerHostObject::default(),
         number_of_taps_required: 1,
         number_of_touches_required: 1,
     });
@@ -413,6 +418,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(UIPanGestureRecognizerHostObject {
+        superclass: UIGestureRecognizerHostObject::default(),
         minimum_number_of_touches: 1,
         maximum_number_of_touches: NSInteger::MAX,
         translation: CGPoint { x: 0.0, y: 0.0 },
@@ -473,6 +479,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(UISwipeGestureRecognizerHostObject {
+        superclass: UIGestureRecognizerHostObject::default(),
         direction: UISwipeGestureRecognizerDirectionRight,
         number_of_touches_required: 1,
     });
@@ -513,6 +520,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(UILongPressGestureRecognizerHostObject {
+        superclass: UIGestureRecognizerHostObject::default(),
         minimum_press_duration: 0.5, // Apple default
         allowable_movement: 10.0,    // Apple default
         number_of_taps_required: 0,
