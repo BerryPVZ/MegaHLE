@@ -280,4 +280,4 @@ com.StarByte.NEX: --landscape-left --force-composition
 
 # Minion Jump / SheepEscape
 # Real layout is iPad landscape, not iPhone portrait/480x320.
-com.apprisetec9.minionjump: --device-family=ipad --landscape-right
+com.apprisetec9.minionjump: --device-family=ipad --landscape-right --fullscreen --force-composition
