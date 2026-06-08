@@ -229,7 +229,6 @@ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
 
     if app_id == "com.apprisetec9.minionjump" {
         unsafe {
-            std::env::set_var("TOUCHHLE_MINIONJUMP_IPAD_LANDSCAPE_WINDOW", "1");
             std::env::set_var("TOUCHHLE_FORCE_IPAD_DEVICE_IDENTITY", "1");
             std::env::set_var("TOUCHHLE_FORCE_IPAD_LANDSCAPE_SCREEN", "1");
         }
