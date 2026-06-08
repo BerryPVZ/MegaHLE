@@ -161,6 +161,26 @@ fn objc_msgSend_inner(
     let _guard = DepthGuard;
     if depth > MAX_DEPTH {
         let sel_name = selector.as_str(&env.mem).to_string();
+
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump")
+            && (sel_name == "activate"
+                || sel_name == "selected"
+                || sel_name == "unselected"
+                || sel_name == "animateFocusMenuItem:"
+                || sel_name == "animateFocusLoseMenuItem:"
+                || sel_name.contains("Button")
+                || sel_name.contains("button")
+                || sel_name.contains("play")
+                || sel_name.contains("Play")
+                || sel_name.contains("level")
+                || sel_name.contains("Level"))
+        {
+            log!(
+                "MegaHLE MinionJump ObjC dispatch selector={} receiver={:?}",
+                sel_name,
+                receiver
+            );
+        }
         log!(
             "Warning: objc_msgSend recursion limit ({}) exceeded while dispatching \"{}\" to {:?}; bailing out with a nil return.",
             MAX_DEPTH,
@@ -172,11 +192,9 @@ fn objc_msgSend_inner(
         // fallback path rather than returning nil (which causes cascading
         // failures like "texture cannot be nil!" in games).
         if sel_name == "allocWithZone:" {
-            let obj = env.objc.alloc_object(
-                receiver,
-                Box::new(super::TrivialHostObject),
-                &mut env.mem,
-            );
+            let obj =
+                env.objc
+                    .alloc_object(receiver, Box::new(super::TrivialHostObject), &mut env.mem);
             env.cpu.regs_mut()[0] = obj.to_bits();
             return;
         }
@@ -252,6 +270,180 @@ fn objc_msgSend_inner(
         };
         if class_to_init != nil {
             ensure_class_initialized(env, class_to_init);
+        }
+    }
+
+    // MegaHLE: Minion Jump per-button callback map.
+    //
+    // Old patches forced callbacks by global coordinates/screen state. That made
+    // unrelated buttons jump to level select/menu. This captures the target and
+    // selector from each GrowButton/GrowStarButton factory call, maps the returned
+    // button object to its own callback, then fires that exact callback when that
+    // exact button's release animation runs.
+    static MINIONJUMP_BUTTON_CALLBACKS: std::sync::OnceLock<
+        // button, target, selector, stage_number (0 for non-level buttons)
+        std::sync::Mutex<Vec<(u32, u32, u32, u32)>>,
+    > = std::sync::OnceLock::new();
+    static MINIONJUMP_BUTTON_CALLBACK_REENTRY: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+    static MINIONJUMP_UNLOCKED_LEVEL: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(25);
+    static MINIONJUMP_CURRENT_LEVEL: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(0);
+
+    let minion_active = env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump");
+    let minion_sel_name = if minion_active {
+        selector.as_str(&env.mem).to_string()
+    } else {
+        String::new()
+    };
+    let minion_class_name = if minion_active {
+        env.objc.get_class_name(orig_class).to_owned()
+    } else {
+        String::new()
+    };
+
+    let minion_release_arg0 = env.cpu.regs()[2];
+    let mut minion_factory_should_map = false;
+    let mut minion_factory_target: u32 = 0;
+    let mut minion_factory_sel: u32 = 0;
+    let mut minion_factory_stage: u32 = 0;
+    let mut minion_factory_note = String::new();
+    let mut minion_factory_clears_scene_map = false;
+    let mut minion_factory_unlocks_next_level = false;
+    let mut minion_level_prefired = false;
+
+    if minion_active
+        && minion_class_name == "GrowButton"
+        && minion_sel_name == "buttonWithSprite:selectImage:target:selector:"
+    {
+        let sp = env.cpu.regs()[13];
+        let sp_ptr = crate::mem::ConstPtr::<u8>::from_bits(sp);
+
+        // r0=self/class, r1=_cmd, r2=sprite, r3=selectImage.
+        // stack[0]=target, stack[1]=selector.
+        minion_factory_target = u32::from_le_bytes(env.mem.bytes_at(sp_ptr, 4).try_into().unwrap());
+        minion_factory_sel =
+            u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 4, 4).try_into().unwrap());
+
+        if minion_factory_target != 0 && minion_factory_sel != 0 {
+            let callback_sel_ptr = crate::mem::ConstPtr::<u8>::from_bits(minion_factory_sel);
+            let callback_sel: crate::objc::SEL = unsafe { std::mem::transmute(callback_sel_ptr) };
+            let callback_name = callback_sel.as_str(&env.mem).to_string();
+
+            minion_factory_should_map = true;
+            minion_factory_note = callback_name.clone();
+
+            // Scene root buttons are created when a new scene/menu is built.
+            // Clear old button->callback mappings here so reused guest object
+            // addresses cannot fire stale callbacks from a previous scene.
+            if callback_name == "playAction"
+                || callback_name == "backAction"
+                || callback_name == "selPause"
+            {
+                minion_factory_clears_scene_map = true;
+            }
+
+            // In this game, a result-screen nextAction button is only created
+            // after a level has been cleared. Unlock the following stage as soon
+            // as that result screen exists, so returning to level select keeps progress.
+            if callback_name == "nextAction" {
+                minion_factory_unlocks_next_level = true;
+            }
+
+            log!(
+                "MegaHLE MinionJump factory GrowButton target=0x{:08x} selector={}",
+                minion_factory_target,
+                callback_name
+            );
+        }
+    }
+
+    if minion_active
+        && minion_class_name == "GrowStarButton"
+        && minion_sel_name
+            == "buttonWithSpriteFrame:selectframeName:stageNumber:starCount:locked:tag:target:selector:"
+    {
+        let sp = env.cpu.regs()[13];
+        let sp_ptr = crate::mem::ConstPtr::<u8>::from_bits(sp);
+
+        // r0=self/class, r1=_cmd, r2=spriteFrame, r3=selectframeName.
+        // stack[0]=stageNumber, stack[1]=starCount, stack[2]=locked,
+        // stack[3]=tag, stack[4]=target, stack[5]=selector.
+        let stage_number = u32::from_le_bytes(env.mem.bytes_at(sp_ptr, 4).try_into().unwrap());
+        let star_count = u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 4, 4).try_into().unwrap());
+        let mut locked = u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 8, 4).try_into().unwrap());
+        let tag = u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 12, 4).try_into().unwrap());
+
+        let unlocked_level = MINIONJUMP_UNLOCKED_LEVEL.load(std::sync::atomic::Ordering::Relaxed);
+        if stage_number <= 25 && locked != 0 {
+            let locked_arg_ptr = crate::mem::MutPtr::<u8>::from_bits(sp + 8);
+            env.mem
+                .bytes_at_mut(locked_arg_ptr, 4)
+                .copy_from_slice(&0u32.to_le_bytes());
+            locked = 0;
+            log!(
+                "MegaHLE MinionJump: forced stage {} unlocked in GrowStarButton factory (all-levels-unlocked, unlocked_level={})",
+                stage_number,
+                unlocked_level
+            );
+        }
+
+        minion_factory_target =
+            u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 16, 4).try_into().unwrap());
+        minion_factory_sel =
+            u32::from_le_bytes(env.mem.bytes_at(sp_ptr + 20, 4).try_into().unwrap());
+
+        if minion_factory_target != 0 && minion_factory_sel != 0 {
+            let callback_sel_ptr = crate::mem::ConstPtr::<u8>::from_bits(minion_factory_sel);
+            let callback_sel: crate::objc::SEL = unsafe { std::mem::transmute(callback_sel_ptr) };
+            let callback_name = callback_sel.as_str(&env.mem).to_string();
+
+            log!(
+                "MegaHLE MinionJump factory GrowStarButton stage={} stars={} locked={} tag={} target=0x{:08x} selector={}",
+                stage_number,
+                star_count,
+                locked,
+                tag,
+                minion_factory_target,
+                callback_name
+            );
+
+            // Only map usable level buttons. Stage 1 is forced unlocked above.
+            if locked == 0 && callback_name == "selectLVAction:" {
+                minion_factory_should_map = true;
+                minion_factory_stage = stage_number;
+                minion_factory_note = format!("stage{}:{}", stage_number, callback_name);
+            }
+        }
+    }
+
+    // MegaHLE: Minion Jump selected level index override.
+    //
+    // LevelSelect selection enters gameplay for every unlocked tile now, but the
+    // gameplay layout code asks the app for currentstage/getCurrentStage. If that
+    // stays at 0, every selected level loads level 1's layout.
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        let minion_stage_sel_name = selector.as_str(&env.mem).to_string();
+        if minion_stage_sel_name == "getCurrentStage"
+            || minion_stage_sel_name == "currentstage"
+            || minion_stage_sel_name == "currentStage"
+        {
+            let selected_stage_index: u32 =
+                std::env::var("MEGAHLE_MINIONJUMP_SELECTED_STAGE_INDEX")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+
+            log!(
+                "MegaHLE MinionJump: overriding {} -> {}",
+                minion_stage_sel_name,
+                selected_stage_index
+            );
+
+            env.cpu.regs_mut()[0] = selected_stage_index;
+            env.cpu.regs_mut()[1] = 0;
+            return;
         }
     }
 
@@ -350,6 +542,238 @@ Type mismatch when sending message {} to {:?}!
                     // interfere with pass-through of stack arguments.
                     IMP::Guest(guest_imp) => guest_imp.call_without_pushing_stack_frame(env),
                 }
+
+                if minion_active && minion_factory_should_map {
+                    let returned_button = env.cpu.regs()[0];
+                    if returned_button != 0 {
+                        let map = MINIONJUMP_BUTTON_CALLBACKS
+                            .get_or_init(|| std::sync::Mutex::new(Vec::new()));
+                        let mut map = map.lock().unwrap();
+
+                        if minion_factory_clears_scene_map {
+                            map.clear();
+                            log!(
+                                "MegaHLE MinionJump: cleared button callback map for new scene at selector={}",
+                                minion_factory_note
+                            );
+                        }
+
+                        if minion_factory_unlocks_next_level {
+                            let cur =
+                                MINIONJUMP_CURRENT_LEVEL.load(std::sync::atomic::Ordering::Relaxed);
+                            if cur != 0 {
+                                MINIONJUMP_UNLOCKED_LEVEL
+                                    .fetch_max(cur + 1, std::sync::atomic::Ordering::Relaxed);
+                                log!(
+                                    "MegaHLE MinionJump: unlocked through stage {} from result nextAction factory",
+                                    cur + 1
+                                );
+                            }
+                        }
+
+                        map.retain(|(button, _, _, _)| *button != returned_button);
+                        map.push((
+                            returned_button,
+                            minion_factory_target,
+                            minion_factory_sel,
+                            minion_factory_stage,
+                        ));
+
+                        log!(
+                            "MegaHLE MinionJump: mapped button=0x{:08x} -> target=0x{:08x} selector={}",
+                            returned_button,
+                            minion_factory_target,
+                            minion_factory_note
+                        );
+                    }
+                }
+
+                if minion_active
+                    && (minion_class_name == "GrowButton" || minion_class_name == "GrowStarButton")
+                    && minion_sel_name == "animateFocusLoseMenuItem:"
+                {
+                    let receiver_bits = receiver.to_bits();
+                    let arg_button_bits = minion_release_arg0;
+                    let mapped = {
+                        let map = MINIONJUMP_BUTTON_CALLBACKS
+                            .get_or_init(|| std::sync::Mutex::new(Vec::new()));
+                        let map = map.lock().unwrap();
+                        map.iter()
+                            .find(|(button, _, _, _)| {
+                                *button == receiver_bits || *button == arg_button_bits
+                            })
+                            .copied()
+                    };
+
+                    if let Some((mapped_button, target_raw, sel_raw, mapped_stage)) = mapped {
+                        if target_raw != 0
+                            && sel_raw != 0
+                            && !MINIONJUMP_BUTTON_CALLBACK_REENTRY
+                                .swap(true, std::sync::atomic::Ordering::Relaxed)
+                        {
+                            let target_id = id::from_bits(target_raw);
+                            let callback_sel_ptr = crate::mem::ConstPtr::<u8>::from_bits(sel_raw);
+                            let callback_sel: crate::objc::SEL =
+                                unsafe { std::mem::transmute(callback_sel_ptr) };
+                            let callback_name = callback_sel.as_str(&env.mem).to_string();
+                            // For this app's selectLVAction:, the release argument is the
+                            // sender that carries the Cocos2D menu item/tag correctly. Passing the
+                            // wrapper GrowStarButton as sender makes the level tile animate but not
+                            // actually start the level on rebuilt level-select scenes.
+                            let sender = id::from_bits(minion_release_arg0);
+
+                            if mapped_stage != 0 && callback_name == "selectLVAction:" {
+                                MINIONJUMP_CURRENT_LEVEL
+                                    .store(mapped_stage, std::sync::atomic::Ordering::Relaxed);
+
+                                // This matches the only log-proven working path: let
+                                // GrowStarButton animateFocusLoseMenuItem: run first, then call
+                                // selectLVAction: with the original guest register state. Do not
+                                // pass an explicit sender and do not call loadLevel: directly.
+                                let saved_r0_r3 = [
+                                    env.cpu.regs()[0],
+                                    env.cpu.regs()[1],
+                                    env.cpu.regs()[2],
+                                    env.cpu.regs()[3],
+                                ];
+
+                                // All-level unlock needs selectLVAction: to see the selected
+                                // stage button, not the inner release animation object. The release
+                                // object works for stage 1 but keeps reporting tag 0 for other
+                                // stages, which makes every tile load level 1.
+                                //
+                                // Stage 1 uses tag 0, stage 2 uses tag 1, etc. Force that tag onto
+                                // BOTH objects, then inject the mapped GrowStarButton into r2 for
+                                // the old no-arg compatibility call.
+                                let level_tag = mapped_stage.saturating_sub(1) as i32;
+                                let set_tag_sel = env
+                                    .objc
+                                    .register_host_selector("setTag:".to_string(), &mut env.mem);
+                                let release_sender = id::from_bits(minion_release_arg0);
+                                let mapped_sender = id::from_bits(mapped_button);
+                                let _: () = msg_send_no_type_checking(
+                                    env,
+                                    (release_sender, set_tag_sel, level_tag),
+                                );
+                                if mapped_sender != release_sender {
+                                    let _: () = msg_send_no_type_checking(
+                                        env,
+                                        (mapped_sender, set_tag_sel, level_tag),
+                                    );
+                                }
+
+                                let selected_stage_index = mapped_stage.saturating_sub(1);
+
+                                std::env::set_var(
+                                    "MEGAHLE_MINIONJUMP_SELECTED_STAGE_INDEX",
+                                    format!("{}", selected_stage_index),
+                                );
+
+                                std::env::set_var(
+                                    "MEGAHLE_MINIONJUMP_SELECTED_STAGE",
+                                    format!("{}", mapped_stage),
+                                );
+
+                                log!(
+
+
+                                    "MegaHLE MinionJump: selected stage {} index {} for gameplay layout",
+
+
+                                    mapped_stage,
+
+
+                                    selected_stage_index
+
+
+                                );
+
+                                log!(
+
+
+                                    "MegaHLE MinionJump: POST-ANIM all-level select EXPLICIT-MAPPED-SENDER button=0x{:08x} target={:?} selector={} sender=0x{:08x} release_r2=0x{:08x} old_r2=0x{:08x} stage={} tag={}",
+                                    mapped_button,
+                                    target_id,
+                                    callback_name,
+                                    mapped_button,
+                                    minion_release_arg0,
+                                    saved_r0_r3[2],
+                                    mapped_stage,
+                                    level_tag
+                                );
+
+                                // Now that NSUserDefaults reports every stage unlocked/progressed,
+                                // call selectLVAction: normally with the actual mapped GrowStarButton
+                                // as sender. The no-arg/r2 compatibility path starts gameplay but
+                                // leaves the stage index stuck at 0, so every tile loads level 1.
+                                let _: () = msg_send_no_type_checking(
+                                    env,
+                                    (target_id, callback_sel, mapped_sender),
+                                );
+                                env.cpu.regs_mut()[0..4].copy_from_slice(&saved_r0_r3);
+
+                                MINIONJUMP_BUTTON_CALLBACK_REENTRY
+                                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                                return;
+                            }
+
+                            if callback_name == "nextAction" {
+                                let cur = MINIONJUMP_CURRENT_LEVEL
+                                    .load(std::sync::atomic::Ordering::Relaxed);
+                                if cur != 0 {
+                                    MINIONJUMP_UNLOCKED_LEVEL
+                                        .fetch_max(cur + 1, std::sync::atomic::Ordering::Relaxed);
+                                    log!(
+                                        "MegaHLE MinionJump: unlocked through stage {} via nextAction",
+                                        cur + 1
+                                    );
+                                }
+                            }
+
+                            log!(
+                                "MegaHLE MinionJump: queued mapped button=0x{:08x} target={:?} selector={} sender={:?} stage={} sender_source={} until after touchesEnded dispatch",
+                                mapped_button,
+                                target_id,
+                                callback_name,
+                                sender,
+                                mapped_stage,
+                                "release_arg0"
+                            );
+
+                            // Do not transition scenes from inside GrowButton's release animation
+                            // while UIKit/Cocos2D is still unwinding touchesEnded:. Store normal
+                            // scene-changing callbacks and drain them from ui_touch after touch cleanup.
+                            std::env::set_var(
+                                "MEGAHLE_MINIONJUMP_PENDING_TARGET",
+                                format!("{}", target_raw),
+                            );
+                            std::env::set_var(
+                                "MEGAHLE_MINIONJUMP_PENDING_SEL",
+                                format!("{}", sel_raw),
+                            );
+                            std::env::set_var(
+                                "MEGAHLE_MINIONJUMP_PENDING_SENDER",
+                                format!("{}", sender.to_bits()),
+                            );
+                            std::env::set_var("MEGAHLE_MINIONJUMP_PENDING_CALLBACK", callback_name);
+                            std::env::set_var(
+                                "MEGAHLE_MINIONJUMP_PENDING_STAGE",
+                                format!("{}", mapped_stage),
+                            );
+
+                            MINIONJUMP_BUTTON_CALLBACK_REENTRY
+                                .store(false, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    } else {
+                        log!(
+                            "MegaHLE MinionJump: no mapped callback for released {} receiver=0x{:08x} arg0=0x{:08x}",
+                            minion_class_name,
+                            receiver_bits,
+                            arg_button_bits
+                        );
+                    }
+                }
+
                 return;
             } else {
                 class = superclass;

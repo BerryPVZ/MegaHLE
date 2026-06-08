@@ -344,10 +344,7 @@ impl ClassHostObject {
                     class,
                     name,
                 );
-                format!(
-                    "_touchHLE_UnreadableClass_{:08x}",
-                    class.to_bits()
-                )
+                format!("_touchHLE_UnreadableClass_{:08x}", class.to_bits())
             }
         };
 
@@ -535,8 +532,7 @@ impl ObjC {
             let Some(host_object) = self.get_host_object(class) else {
                 continue;
             };
-            let Some(class_host_object) =
-                host_object.as_any().downcast_ref::<ClassHostObject>()
+            let Some(class_host_object) = host_object.as_any().downcast_ref::<ClassHostObject>()
             else {
                 continue;
             };
@@ -1402,11 +1398,7 @@ pub fn class_getInstanceMethod(
 /// guests that use this entry point to gate optional behaviour
 /// (e.g. `class_respondsToSelector([NSString class], @selector(...))` for
 /// runtime-availability checks in older SDKs).
-pub fn class_respondsToSelector(
-    env: &mut crate::Environment,
-    cls: Class,
-    sel: SEL,
-) -> bool {
+pub fn class_respondsToSelector(env: &mut crate::Environment, cls: Class, sel: SEL) -> bool {
     if cls.is_null() || sel.is_null() {
         return false;
     }
@@ -1621,8 +1613,7 @@ pub fn class_addMethod(
     // `id (*)(id, SEL, ...)` — i.e. a C function pointer. Method names
     // ending with `:` are encoded for the Thumb bit by the linker, so we
     // pass the raw bits straight through.
-    let guest_imp =
-        crate::abi::GuestFunction::from_addr_with_thumb_bit(imp.to_bits());
+    let guest_imp = crate::abi::GuestFunction::from_addr_with_thumb_bit(imp.to_bits());
 
     // Install the new method. `borrow_mut::<ClassHostObject>` walks any
     // host-object inheritance chain so this works for both classes and
@@ -1658,11 +1649,7 @@ pub fn class_addMethod(
 /// class pointer itself (matching what `class_getInstanceMethod` returns).
 /// Class methods live on the metaclass, so we resolve the metaclass first
 /// and then walk its chain looking for the selector.
-pub fn class_getClassMethod(
-    env: &mut crate::Environment,
-    cls: Class,
-    name: SEL,
-) -> ConstVoidPtr {
+pub fn class_getClassMethod(env: &mut crate::Environment, cls: Class, name: SEL) -> ConstVoidPtr {
     if cls.is_null() {
         return ConstVoidPtr::null();
     }
@@ -1792,11 +1779,7 @@ pub fn objc_msgForward_stret(
 /// implement it line-by-line so the reference counts of both the old
 /// and new objects stay consistent with how a non-ARC manual
 /// retain/release would have managed them.
-pub fn objc_storeStrong(
-    env: &mut crate::Environment,
-    location: crate::mem::MutPtr<id>,
-    obj: id,
-) {
+pub fn objc_storeStrong(env: &mut crate::Environment, location: crate::mem::MutPtr<id>, obj: id) {
     if location.is_null() {
         return;
     }
@@ -2032,11 +2015,7 @@ pub fn objc_disposeClassPair(_env: &mut crate::Environment, _cls: Class) {}
 /// hooking libraries. Returns the previous superclass and rewrites the
 /// class's inheritance chain in-place.
 /// <https://developer.apple.com/documentation/objectivec/1418687-class_setsuperclass>
-pub fn class_setSuperclass(
-    env: &mut crate::Environment,
-    cls: Class,
-    new_super: Class,
-) -> Class {
+pub fn class_setSuperclass(env: &mut crate::Environment, cls: Class, new_super: Class) -> Class {
     if cls.is_null() {
         return nil;
     }

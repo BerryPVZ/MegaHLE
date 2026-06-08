@@ -341,12 +341,22 @@ pub const CLASSES: ClassExports = objc_classes! {
     let internalformat = gles11::RGBA8_OES;
 
     let (width, height) = {
-        let bounds: CGRect = msg![env; drawable bounds];
-        let CGSize { width, height } = bounds.size;
-        assert!((0.0..(u32::MAX as f32)).contains(&width));
-        assert!((0.0..(u32::MAX as f32)).contains(&height));
-        let scale_hack = env.options.scale_hack.get();
-        (width.round() as u32 * scale_hack, height.round() as u32 * scale_hack)
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+            // MegaHLE: Minion Jump / SheepEscape is a fixed iPad-landscape
+            // Cocos2D game. The app now reports 1024x768 and glViewport is
+            // 1024x768, so the EAGL renderbuffer must match too. If storage
+            // stays portrait or mismatched, the presenter samples a shifted
+            // source texture, causing the black top/bottom strip.
+            log!("MegaHLE: Minion Jump forcing EAGL renderbuffer storage to 1024x768");
+            (1024, 768)
+        } else {
+            let bounds: CGRect = msg![env; drawable bounds];
+            let CGSize { width, height } = bounds.size;
+            assert!((0.0..(u32::MAX as f32)).contains(&width));
+            assert!((0.0..(u32::MAX as f32)).contains(&height));
+            let scale_hack = env.options.scale_hack.get();
+            (width.round() as u32 * scale_hack, height.round() as u32 * scale_hack)
+        }
     };
 
     let window = env.window.as_mut().expect("OpenGL ES is not supported in headless mode");
@@ -1221,13 +1231,21 @@ unsafe fn present_renderbuffer(env: &mut Environment) {
     // FIXME: A cleaner solution would be to read the actual transform from
     //        the EAGL layer's view hierarchy and apply it here, instead of
     //        using a device-family heuristic.
-    let needs_autorotation_compensation =
-        matches!(device_family, crate::window::DeviceFamily::iPad)
-            && !matches!(
-                device_orientation,
-                crate::window::DeviceOrientation::Portrait
-            );
-    let rotation_matrix = if needs_autorotation_compensation {
+    let is_minionjump = env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump");
+
+    let needs_autorotation_compensation = !is_minionjump
+        && matches!(device_family, crate::window::DeviceFamily::iPad)
+        && !matches!(
+            device_orientation,
+            crate::window::DeviceOrientation::Portrait
+        );
+
+    let rotation_matrix = if is_minionjump {
+        // MegaHLE: Minion Jump / SheepEscape already renders landscape into
+        // a 1024x768 GL viewport. The normal iPad presenter rotation path
+        // double-transforms it, causing the cropped strip + black bottom.
+        crate::matrix::Matrix::z_rotation(0.0)
+    } else if needs_autorotation_compensation {
         env.window
             .as_mut()
             .unwrap()

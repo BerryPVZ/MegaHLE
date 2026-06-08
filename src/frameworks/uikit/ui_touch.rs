@@ -11,8 +11,8 @@ use crate::frameworks::core_graphics::{CGPoint, CGRect};
 use crate::frameworks::foundation::{NSInteger, NSTimeInterval, NSUInteger};
 use crate::mem::MutVoidPtr;
 use crate::objc::{
-    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
-    NSZonePtr,
+    autorelease, id, msg, msg_class, msg_send_no_type_checking, nil, objc_classes, release, retain,
+    ClassExports, HostObject, NSZonePtr,
 };
 use crate::window::{Coords, Event, FingerId};
 use crate::Environment;
@@ -174,6 +174,10 @@ fn handle_touches_down(env: &mut Environment, map: HashMap<FingerId, Coords>) {
             x: coords.0,
             y: coords.1,
         };
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_X", format!("{}", coords.0));
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_Y", format!("{}", coords.1));
+        }
         let new_touch: id = msg_class![env; UITouch alloc];
         *env.objc.borrow_mut(new_touch) = UITouchHostObject {
             view: nil,
@@ -363,6 +367,10 @@ fn handle_touches_move(env: &mut Environment, map: HashMap<FingerId, Coords>) {
             x: coords.0,
             y: coords.1,
         };
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_X", format!("{}", coords.0));
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_Y", format!("{}", coords.1));
+        }
         let view = env.objc.borrow::<UITouchHostObject>(touch).view;
         let host = env.objc.borrow_mut::<UITouchHostObject>(touch);
         if host.location == location {
@@ -406,6 +414,97 @@ fn handle_touches_move(env: &mut Environment, map: HashMap<FingerId, Coords>) {
     release(env, pool);
 }
 
+fn drain_minionjump_pending_callback(env: &mut Environment, select_only: bool) {
+    if env.bundle.bundle_identifier_opt() != Some("com.apprisetec9.minionjump") {
+        return;
+    }
+
+    let Some(target_raw) = std::env::var("MEGAHLE_MINIONJUMP_PENDING_TARGET")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+    else {
+        return;
+    };
+    let Some(sel_raw) = std::env::var("MEGAHLE_MINIONJUMP_PENDING_SEL")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+    else {
+        return;
+    };
+    let sender_raw = std::env::var("MEGAHLE_MINIONJUMP_PENDING_SENDER")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    let callback_name = std::env::var("MEGAHLE_MINIONJUMP_PENDING_CALLBACK")
+        .unwrap_or_else(|_| "<unknown>".to_string());
+    let stage =
+        std::env::var("MEGAHLE_MINIONJUMP_PENDING_STAGE").unwrap_or_else(|_| "0".to_string());
+
+    // Level selection needs to run while the ended UITouch/sender is still alive,
+    // but scene-changing menu/result buttons need to run after touch cleanup so the
+    // next scene does not inherit a stuck press state.
+    let is_level_select = callback_name == "selectLVAction:";
+    if select_only != is_level_select {
+        return;
+    }
+
+    std::env::remove_var("MEGAHLE_MINIONJUMP_PENDING_TARGET");
+    std::env::remove_var("MEGAHLE_MINIONJUMP_PENDING_SEL");
+    std::env::remove_var("MEGAHLE_MINIONJUMP_PENDING_SENDER");
+    std::env::remove_var("MEGAHLE_MINIONJUMP_PENDING_CALLBACK");
+    std::env::remove_var("MEGAHLE_MINIONJUMP_PENDING_STAGE");
+
+    if target_raw == 0 || sel_raw == 0 {
+        return;
+    }
+
+    let target_id = id::from_bits(target_raw);
+    let sender = id::from_bits(sender_raw);
+    let callback_sel_ptr = crate::mem::ConstPtr::<u8>::from_bits(sel_raw);
+    let callback_sel: crate::objc::SEL = unsafe { std::mem::transmute(callback_sel_ptr) };
+
+    let drain_timing = if is_level_select {
+        "before touch cleanup"
+    } else {
+        "after touch cleanup"
+    };
+
+    log!(
+        "MegaHLE MinionJump: draining pending callback selector={} target={:?} sender={:?} stage={} {}",
+        callback_name,
+        target_id,
+        sender,
+        stage,
+        drain_timing
+    );
+
+    if callback_name == "selectLVAction:" && sender != nil {
+        // Minion Jump decides the selected level from the sender's tag.
+        // The Cocos release argument can be a recreated menu item whose tag
+        // is stale/missing after returning to level select. Restore the tag
+        // from the stage captured at GrowStarButton factory time before
+        // calling selectLVAction:.
+        let stage_num = stage.parse::<NSInteger>().unwrap_or(1);
+        let tag_value: NSInteger = stage_num.saturating_sub(1);
+        let set_tag_sel = env
+            .objc
+            .register_host_selector("setTag:".to_string(), &mut env.mem);
+        log!(
+            "MegaHLE MinionJump: forcing selectLVAction sender {:?} tag={} for stage={}",
+            sender,
+            tag_value,
+            stage
+        );
+        let _: () = msg_send_no_type_checking(env, (sender, set_tag_sel, tag_value));
+    }
+
+    if callback_name.ends_with(':') {
+        let _: () = msg_send_no_type_checking(env, (target_id, callback_sel, sender));
+    } else {
+        let _: () = msg_send_no_type_checking(env, (target_id, callback_sel));
+    }
+}
+
 fn handle_touches_up(env: &mut Environment, map: HashMap<FingerId, Coords>) {
     let pool: id = msg_class![env;
         NSAutoreleasePool new];
@@ -433,6 +532,7 @@ fn handle_touches_up(env: &mut Environment, map: HashMap<FingerId, Coords>) {
     }
 
     let mut view_touches: HashMap<id, id> = HashMap::new();
+    let mut ended_touches: Vec<(FingerId, id)> = Vec::new();
     for (finger_id, coords) in map {
         let Some(&touch) = env
             .framework_state
@@ -447,6 +547,10 @@ fn handle_touches_up(env: &mut Environment, map: HashMap<FingerId, Coords>) {
             x: coords.0,
             y: coords.1,
         };
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_X", format!("{}", coords.0));
+            std::env::set_var("MEGAHLE_MINIONJUMP_LAST_TOUCH_Y", format!("{}", coords.1));
+        }
         let view = env.objc.borrow::<UITouchHostObject>(touch).view;
         {
             let host = env.objc.borrow_mut::<UITouchHostObject>(touch);
@@ -467,12 +571,11 @@ fn handle_touches_up(env: &mut Environment, map: HashMap<FingerId, Coords>) {
         }
         let v_set: id = *view_touches.get(&view).unwrap();
         let _: () = msg![env; v_set addObject:touch];
-        env.framework_state
-            .uikit
-            .ui_touch
-            .current_touches
-            .remove(&finger_id);
-        release(env, touch);
+        // Keep the UITouch alive and still registered until after touchesEnded:
+        // has been delivered. Some Cocos2D menu code asks about the touch while
+        // handling touchesEnded; removing/releasing it early can make buttons
+        // visually press/release without running their real action cleanly.
+        ended_touches.push((finger_id, touch));
     }
 
     let event = ui_event::new_event(env, all_touches_set);
@@ -481,5 +584,19 @@ fn handle_touches_up(env: &mut Environment, map: HashMap<FingerId, Coords>) {
         let _: () = msg![env;
             view touchesEnded:v_set withEvent:event];
     }
+
+    drain_minionjump_pending_callback(env, true);
+
+    for (finger_id, touch) in ended_touches {
+        env.framework_state
+            .uikit
+            .ui_touch
+            .current_touches
+            .remove(&finger_id);
+        release(env, touch);
+    }
+
+    drain_minionjump_pending_callback(env, false);
+
     release(env, pool);
 }

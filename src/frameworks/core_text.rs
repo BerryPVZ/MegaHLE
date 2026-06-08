@@ -33,11 +33,10 @@
 //! - `CTFontDescriptor.h`, `CTFont.h`, `CTFontTraits.h`,
 //!   `CTStringAttributes.h` (Apple SDK).
 
-use crate::dyld::{ConstantExports, FunctionExports, HostConstant, HostDylib, export_c_func};
-use crate::Environment;
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant, HostDylib};
 use crate::frameworks::core_graphics::CGFloat;
 use crate::mem::{ConstVoidPtr, MutPtr};
-
+use crate::Environment;
 
 /// Opaque CoreText font reference.
 pub type CTFontRef = crate::objc::id;
@@ -53,10 +52,10 @@ pub type CTFontRef = crate::objc::id;
 /// Reference: <https://developer.apple.com/documentation/coretext/1509694-ctfontcreatewithgraphicsfont>
 fn CTFontCreateWithGraphicsFont(
     _env: &mut Environment,
-    _graphics_font: crate::mem::ConstVoidPtr,  // CGFontRef (opaque)
+    _graphics_font: crate::mem::ConstVoidPtr, // CGFontRef (opaque)
     _size: CGFloat,
-    _matrix: ConstVoidPtr,                       // const CGAffineTransform*
-    _attributes: crate::objc::id,               // CTFontDescriptorRef
+    _matrix: ConstVoidPtr,        // const CGAffineTransform*
+    _attributes: crate::objc::id, // CTFontDescriptorRef
 ) -> CTFontRef {
     log_dbg!("CTFontCreateWithGraphicsFont: returning NULL (not implemented)");
     crate::objc::nil
@@ -73,7 +72,7 @@ fn CTFontCreateWithGraphicsFont(
 /// Reference: <https://developer.apple.com/documentation/coretext/1499468-ctfontmanagerregistergraphicsfon>
 fn CTFontManagerRegisterGraphicsFont(
     env: &mut Environment,
-    font: ConstVoidPtr,    // CGFontRef
+    font: ConstVoidPtr,             // CGFontRef
     error: MutPtr<crate::objc::id>, // CFErrorRef*
 ) -> bool {
     if !error.is_null() {
@@ -160,8 +159,8 @@ fn CTParagraphStyleCreateCopy(
 fn CTParagraphStyleGetValueForSpecifier(
     env: &mut Environment,
     _paragraph_style: CTParagraphStyleRef,
-    _spec: u32,              // CTParagraphStyleSpecifier
-    value_buffer_size: u32,  // size_t
+    _spec: u32,             // CTParagraphStyleSpecifier
+    value_buffer_size: u32, // size_t
     value_buffer: MutPtr<u8>,
 ) -> bool {
     // Zero-fill the buffer — this provides the documented "default" values

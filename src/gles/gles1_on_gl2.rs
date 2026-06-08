@@ -2054,19 +2054,14 @@ impl GLES for GLES1OnGL2<'_> {
         );
         if is_pvrtc_2bit || is_pvrtc_4bit {
             let Ok(width_u) = u32::try_from(width) else {
-                log!(
-                    "Warning: CompressedTexSubImage2D: invalid width {width}; skipping."
-                );
+                log!("Warning: CompressedTexSubImage2D: invalid width {width}; skipping.");
                 return;
             };
             let Ok(height_u) = u32::try_from(height) else {
-                log!(
-                    "Warning: CompressedTexSubImage2D: invalid height {height}; skipping."
-                );
+                log!("Warning: CompressedTexSubImage2D: invalid height {height}; skipping.");
                 return;
             };
-            let pixels =
-                crate::image::decode_pvrtc(data_slice, is_pvrtc_2bit, width_u, height_u);
+            let pixels = crate::image::decode_pvrtc(data_slice, is_pvrtc_2bit, width_u, height_u);
             gl21::TexSubImage2D(
                 target,
                 level,
@@ -2574,13 +2569,7 @@ impl GLES for GLES1OnGL2<'_> {
         width: GLsizei,
         height: GLsizei,
     ) {
-        gl21::RenderbufferStorageMultisampleEXT(
-            target,
-            samples,
-            internalformat,
-            width,
-            height,
-        )
+        gl21::RenderbufferStorageMultisampleEXT(target, samples, internalformat, width, height)
     }
     unsafe fn ResolveMultisampleFramebufferAPPLE(&mut self) {
         // Apple's GL_APPLE_framebuffer_multisample doesn't take any arguments:

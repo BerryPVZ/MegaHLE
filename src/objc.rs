@@ -35,21 +35,21 @@ mod synchronization;
 mod weak;
 
 pub use classes::{
-    class_addMethod, class_copyIvarList, class_copyMethodList, class_copyPropertyList,
-    class_copyProtocolList, class_getClassMethod, class_getInstanceMethod, class_getInstanceSize,
-    class_getMethodImplementation, class_getMethodImplementation_stret, class_getName,
-    class_getProperty, class_getSuperclass, class_replaceMethod, class_respondsToSelector, class_setSuperclass,
-    method_exchangeImplementations,
-    method_getImplementation, method_getTypeEncoding, method_setImplementation, objc_storeStrong,
-    objc_alloc, objc_allocateClassPair, objc_autorelease, objc_autoreleasePoolPop,
-    objc_autoreleasePoolPush, objc_autoreleaseReturnValue, objc_begin_catch, objc_classes,
-    objc_copyClassNamesForImage, objc_disposeClassPair, objc_end_catch, objc_exception_throw,
-    objc_getClass, objc_getMetaClass, objc_getProtocol, objc_getRequiredClass, objc_lookUpClass,
-    objc_readClassPair, objc_registerClassPair,
-    objc_release, objc_retain, objc_retainAutorelease, objc_retainAutoreleaseReturnValue,
-    objc_retainBlock, __objc_deallocOnMainThreadHelper,
-    objc_retainAutoreleasedReturnValue, objc_unsafeClaimAutoreleasedReturnValue, object_getClass, object_getClassName, object_getIndexedIvars,
-    protocol_getName, objc_getClassList, protocol_conformsToProtocol, Class, ClassExports, ClassTemplate,
+    __objc_deallocOnMainThreadHelper, class_addMethod, class_copyIvarList, class_copyMethodList,
+    class_copyPropertyList, class_copyProtocolList, class_getClassMethod, class_getInstanceMethod,
+    class_getInstanceSize, class_getMethodImplementation, class_getMethodImplementation_stret,
+    class_getName, class_getProperty, class_getSuperclass, class_replaceMethod,
+    class_respondsToSelector, class_setSuperclass, method_exchangeImplementations,
+    method_getImplementation, method_getTypeEncoding, method_setImplementation, objc_alloc,
+    objc_allocateClassPair, objc_autorelease, objc_autoreleasePoolPop, objc_autoreleasePoolPush,
+    objc_autoreleaseReturnValue, objc_begin_catch, objc_classes, objc_copyClassNamesForImage,
+    objc_disposeClassPair, objc_end_catch, objc_exception_throw, objc_getClass, objc_getClassList,
+    objc_getMetaClass, objc_getProtocol, objc_getRequiredClass, objc_lookUpClass,
+    objc_readClassPair, objc_registerClassPair, objc_release, objc_retain, objc_retainAutorelease,
+    objc_retainAutoreleaseReturnValue, objc_retainAutoreleasedReturnValue, objc_retainBlock,
+    objc_storeStrong, objc_unsafeClaimAutoreleasedReturnValue, object_getClass,
+    object_getClassName, object_getIndexedIvars, protocol_conformsToProtocol, protocol_getName,
+    Class, ClassExports, ClassTemplate,
 };
 pub use messages::{
     autorelease, msg, msg_class, msg_send, msg_send_no_type_checking, msg_send_super2, msg_super,
@@ -72,11 +72,11 @@ use messages::{
 };
 use methods::method_list_t;
 use objects::{objc_object, HostObjectEntry};
+use properties::objc_setProperty_atomic;
 use properties::{ivar_list_t, objc_copyStruct, objc_getProperty, objc_setProperty};
 use properties::{
     objc_setProperty_atomic_copy, objc_setProperty_nonatomic, objc_setProperty_nonatomic_copy,
 };
-use properties::objc_setProperty_atomic;
 use selectors::sel_registerName;
 use synchronization::{objc_sync_enter, objc_sync_exit};
 
@@ -198,7 +198,6 @@ impl ObjC {
     }
 }
 
-
 // ──────────────────────────────────────────────────────────────────
 // Associated objects  (<objc/runtime.h>)
 // ──────────────────────────────────────────────────────────────────
@@ -261,7 +260,9 @@ fn objc_setAssociatedObject(
         _ => false,
     };
 
-    env.objc.associated_objects.insert(map_key, (value, is_retained));
+    env.objc
+        .associated_objects
+        .insert(map_key, (value, is_retained));
 }
 
 /// `id objc_getAssociatedObject(id object, const void *key)`

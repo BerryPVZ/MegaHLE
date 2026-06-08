@@ -149,6 +149,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (UIInterfaceOrientation)statusBarOrientation {
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        // UIInterfaceOrientationLandscapeRight
+        return 4 as UIInterfaceOrientation;
+    }
+
+
     match env.window().current_rotation() {
         DeviceOrientation::Portrait => UIDeviceOrientationPortrait,
         DeviceOrientation::LandscapeLeft => UIDeviceOrientationLandscapeLeft,
@@ -863,8 +869,7 @@ const UIApplicationStatusBarOrientationUserInfoKey: &str =
     "UIApplicationStatusBarOrientationUserInfoKey";
 const UIApplicationBackgroundFetchIntervalMinimum: &str =
     "UIApplicationBackgroundFetchIntervalMinimum";
-const UIApplicationBackgroundFetchIntervalNever: &str =
-    "UIApplicationBackgroundFetchIntervalNever";
+const UIApplicationBackgroundFetchIntervalNever: &str = "UIApplicationBackgroundFetchIntervalNever";
 // Launch options keys — Apple `UIApplication.h` (`UIApplicationLaunchOptionsKey`).
 const UIApplicationLaunchOptionsURLKey: &str = "UIApplicationLaunchOptionsURLKey";
 const UIApplicationLaunchOptionsSourceApplicationKey: &str =

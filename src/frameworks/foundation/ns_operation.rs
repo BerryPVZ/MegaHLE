@@ -9,8 +9,7 @@ use crate::objc::{
     NSZonePtr, SEL,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum OperationState {
     #[default]
     Ready,
@@ -39,7 +38,6 @@ struct NSOperationHostObject {
     selector: Option<SEL>,
     arg: id,
 }
-
 
 impl HostObject for NSOperationHostObject {}
 

@@ -56,10 +56,7 @@ pub const CONSTANTS: ConstantExports = &[
         "_NSURLIsExcludedFromBackupKey",
         HostConstant::NSString("NSURLIsExcludedFromBackupKey"),
     ),
-    (
-        "_NSURLNameKey",
-        HostConstant::NSString("NSURLNameKey"),
-    ),
+    ("_NSURLNameKey", HostConstant::NSString("NSURLNameKey")),
     (
         "_NSURLLocalizedNameKey",
         HostConstant::NSString("NSURLLocalizedNameKey"),

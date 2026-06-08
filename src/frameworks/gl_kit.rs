@@ -27,18 +27,16 @@ unsafe impl SafeRead for GLKMatrix4 {}
 fn glk_matrix4_identity(env: &mut Environment) -> ConstVoidPtr {
     let identity = GLKMatrix4 {
         m: [
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
         ],
     };
     env.mem.alloc_and_write(identity).cast_void().cast_const()
 }
 
-pub const CONSTANTS: ConstantExports = &[
-    ("_GLKMatrix4Identity", HostConstant::Custom(glk_matrix4_identity)),
-];
+pub const CONSTANTS: ConstantExports = &[(
+    "_GLKMatrix4Identity",
+    HostConstant::Custom(glk_matrix4_identity),
+)];
 
 pub const FUNCTIONS: FunctionExports = &[];
 

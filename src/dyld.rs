@@ -606,7 +606,13 @@ impl Dyld {
                 if name.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')) {
                     let sanitized: String = name
                         .chars()
-                        .map(|c| if c.is_ascii_alphanumeric() || c == '$' { c } else { '_' })
+                        .map(|c| {
+                            if c.is_ascii_alphanumeric() || c == '$' {
+                                c
+                            } else {
+                                '_'
+                            }
+                        })
                         .collect();
                     writeln!(file, "int {sanitized} asm(\"{constant_symbol}\");")?;
                 } else {
@@ -884,12 +890,7 @@ impl Dyld {
                         .create_proc_address_no_inval(mem, sym)
                         .unwrap()
                         .to_ptr();
-                    log_dbg!(
-                        "Linked {} -> {} at {:?}",
-                        name,
-                        target_name,
-                        trampoline_ptr
-                    );
+                    log_dbg!("Linked {} -> {} at {:?}", name, target_name, trampoline_ptr);
                     trampoline_ptr
                 } else {
                     // Fallback: a BX LR stub that returns 0
@@ -1060,7 +1061,9 @@ impl Dyld {
                     trampoline_ptr
                 );
                 trampoline_ptr
-            } else if let Some((_, template)) = search_host_dylibs(|dylib| dylib.constant_exports, name) {
+            } else if let Some((_, template)) =
+                search_host_dylibs(|dylib| dylib.constant_exports, name)
+            {
                 // Constants from host dylibs need late linking (they may
                 // require a full Environment to resolve, e.g. NSString
                 // objects). Store for resolution in do_late_linking().

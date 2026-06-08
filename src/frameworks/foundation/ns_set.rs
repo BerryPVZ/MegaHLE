@@ -14,7 +14,7 @@ use crate::environment::Environment;
 use crate::mem::{ConstPtr, MutPtr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
-    NSZonePtr,
+    NSZonePtr, SEL,
 };
 
 /// Belongs to _touchHLE_NSSet
@@ -131,9 +131,45 @@ pub const CLASSES: ClassExports = objc_classes! {
         count as i32
 }
 
-@end
+    - (())makeObjectsPerformSelector:(SEL)sel {
+        if sel.is_null() {
+            return;
+        }
 
-// NSMutableSet is an abstract class. A subclass must provide everything
+        let objects: id = msg![env; this allObjects];
+        if objects == nil {
+            return;
+        }
+
+        let count: NSUInteger = msg![env; objects count];
+        for i in 0..count {
+            let obj: id = msg![env; objects objectAtIndex:i];
+            if obj != nil {
+                let _: id = msg![env; obj performSelector:sel];
+            }
+        }
+    }
+
+    - (())makeObjectsPerformSelector:(SEL)sel withObject:(id)arg {
+        if sel.is_null() {
+            return;
+        }
+
+        let objects: id = msg![env; this allObjects];
+        if objects == nil {
+            return;
+        }
+
+        let count: NSUInteger = msg![env; objects count];
+        for i in 0..count {
+            let obj: id = msg![env; objects objectAtIndex:i];
+            if obj != nil {
+                let _: id = msg![env; obj performSelector:sel withObject:arg];
+            }
+        }
+    }
+
+@end // NSMutableSet is an abstract class. A subclass must provide everything
 // NSSet provides, plus:
 // - (void)addObject:(id)object;
 // - (void)removeObject:(id)object;

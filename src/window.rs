@@ -1468,6 +1468,16 @@ impl Window {
     pub fn viewport(&self) -> (u32, u32, u32, u32) {
         let (app_width, app_height) =
             size_for_orientation(self.device_family, self.device_orientation, self.scale_hack);
+
+        // MegaHLE: Minion Jump / SheepEscape should stretch to the full
+        // iPad landscape drawable instead of being aspect-letterboxed.
+        if std::env::var_os("TOUCHHLE_MINIONJUMP_IPAD_LANDSCAPE_WINDOW").is_some() {
+            // MegaHLE: Minion Jump / SheepEscape is fixed iPad landscape.
+            // Do NOT use the host drawable height here; on desktop it can be
+            // taller than the virtual app screen, causing black bottom space
+            // and touches like y=975 against a 1024x768 CCGLView.
+            return (0, 0, 1024, 768);
+        }
         if !self.fullscreen && !Self::rotatable_fullscreen() {
             return (0, 0, app_width, app_height);
         }

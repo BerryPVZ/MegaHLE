@@ -158,8 +158,7 @@ unsafe fn detect_texture_lod_ext_support() -> bool {
     if s.is_empty() {
         return false;
     }
-    s.split(' ')
-        .any(|ext| ext == "GL_EXT_shader_texture_lod")
+    s.split(' ').any(|ext| ext == "GL_EXT_shader_texture_lod")
 }
 
 /// Patch a GLSL ES shader source for compatibility with native ES 2.0 drivers
@@ -190,9 +189,7 @@ fn patch_shader_for_native_es2(source: &str, texture_lod_ext_supported: bool) ->
             version_line = Some(line.to_string());
         } else if trimmed.starts_with("#extension") {
             // If the driver doesn't support texture_lod, strip that extension
-            if !texture_lod_ext_supported
-                && trimmed.contains("GL_EXT_shader_texture_lod")
-            {
+            if !texture_lod_ext_supported && trimmed.contains("GL_EXT_shader_texture_lod") {
                 // Drop this line entirely
                 continue;
             }
@@ -311,12 +308,7 @@ fn replace_texture_lod_ext_calls(source: &str) -> String {
                 );
             } else {
                 // No comma found — just rename the function
-                result = format!(
-                    "{}{}{}",
-                    &result[..start],
-                    new_name,
-                    &result[end_of_name..]
-                );
+                result = format!("{}{}{}", &result[..start], new_name, &result[end_of_name..]);
             }
         }
     }
@@ -1042,8 +1034,7 @@ impl GLES for GLES2Native<'_> {
             let s = if !length.is_null() {
                 let len = *length.add(i);
                 if len >= 0 {
-                    let slice =
-                        std::slice::from_raw_parts(raw_ptr as *const u8, len as usize);
+                    let slice = std::slice::from_raw_parts(raw_ptr as *const u8, len as usize);
                     std::str::from_utf8(slice).unwrap_or("").to_owned()
                 } else {
                     CStr::from_ptr(raw_ptr).to_string_lossy().into_owned()

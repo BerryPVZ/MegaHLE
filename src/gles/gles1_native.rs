@@ -1659,7 +1659,6 @@ impl<'gl_ctx> GLES1Native<'gl_ctx> {
              reporting GL_INVALID_OPERATION via glGetError as required by spec.",
             fn_name
         );
-        self.pending_synthetic_error
-            .set(gles11::INVALID_OPERATION);
+        self.pending_synthetic_error.set(gles11::INVALID_OPERATION);
     }
 }

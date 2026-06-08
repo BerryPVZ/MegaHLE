@@ -183,6 +183,27 @@ fn init_common(env: &mut Environment, this: id) -> id {
     this
 }
 
+fn megahle_minionjump_force_landscape_ccglview(env: &mut Environment, this: id) -> bool {
+    if env.bundle.bundle_identifier_opt() != Some("com.apprisetec9.minionjump") {
+        return false;
+    }
+
+    let cls: crate::objc::Class = msg![env; this class];
+    let class_name = env.objc.get_class_name(cls);
+
+    class_name == "CCGLView"
+}
+
+fn megahle_minionjump_landscape_rect() -> CGRect {
+    CGRect {
+        origin: CGPoint { x: 0.0, y: 0.0 },
+        size: CGSize {
+            width: 1024.0,
+            height: 768.0,
+        },
+    }
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -1383,10 +1404,22 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; layer setPosition:center]
 }
 - (CGRect)frame {
+    if megahle_minionjump_force_landscape_ccglview(env, this) {
+        return megahle_minionjump_landscape_rect();
+    }
+
+
     let layer = env.objc.borrow::<UIViewHostObject>(this).layer;
     msg![env; layer frame]
 }
 - (())setFrame:(CGRect)frame {
+    let frame = if megahle_minionjump_force_landscape_ccglview(env, this) {
+        megahle_minionjump_landscape_rect()
+    } else {
+        frame
+    };
+
+
     let layer = env.objc.borrow::<UIViewHostObject>(this).layer;
     msg![env; layer setFrame:frame]
 }

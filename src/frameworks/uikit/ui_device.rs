@@ -129,6 +129,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (UIDeviceOrientation)orientation {
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        // UIDeviceOrientationLandscapeRight
+        return 4 as UIDeviceOrientation;
+    }
+
+
     match env.window().current_rotation() {
         DeviceOrientation::Portrait      => UIDeviceOrientationPortrait,
         DeviceOrientation::LandscapeLeft  => UIDeviceOrientationLandscapeLeft,
@@ -154,13 +160,25 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // MARK: - Identity
 
+
 - (id)model {
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        return ns_string::get_static_str(env, "iPad");
+    }
+
     ns_string::get_static_str(env, "iPhone")
 }
+
+
 - (id)localizedModel {
     msg![env; this model]
 }
+
 - (id)name {
+    if std::env::var_os("TOUCHHLE_FORCE_IPAD_DEVICE_IDENTITY").is_some() {
+        return ns_string::get_static_str(env, "iPad");
+    }
+
     ns_string::get_static_str(env, "iPhone")
 }
 - (id)systemName {
@@ -220,11 +238,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // MARK: - Idiom
 
+
 - (UIUserInterfaceIdiom)userInterfaceIdiom {
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        return UIUserInterfaceIdiomPad;
+    }
+
     UIUserInterfaceIdiomPhone
 }
-
-// MARK: - Capabilities
 
 - (bool)isMultitaskingSupported {
     false
@@ -276,11 +297,27 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (id)platform {
     // Matches the sysctl hw.machine value on a first-gen iPhone.
-    ns_string::get_static_str(env, "iPhone1,1")
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        ns_string::get_static_str(env, "iPad1,1")
+    } else {
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        ns_string::get_static_str(env, "iPad1,1")
+    } else {
+        ns_string::get_static_str(env, "iPhone1,1")
+    }
+    }
 }
 
 - (id)hwModel {
-    ns_string::get_static_str(env, "iPhone1,1")
+    if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        ns_string::get_static_str(env, "iPad1,1")
+    } else {
+        if env.bundle.bundle_identifier_opt() == Some("com.apprisetec9.minionjump") {
+        ns_string::get_static_str(env, "iPad1,1")
+    } else {
+        ns_string::get_static_str(env, "iPhone1,1")
+    }
+    }
 }
 
 // MARK: - Notifications (post helpers used by subcomponents)

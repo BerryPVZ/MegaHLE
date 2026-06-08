@@ -269,7 +269,10 @@ fn unlink(env: &mut Environment, path: ConstPtr<u8>) -> i32 {
     // fail with EPERM (Apple) / EISDIR (Linux). We map that to EPERM, the
     // documented Darwin behaviour.
     if env.fs.is_dir(guest_path) {
-        log_dbg!("unlink('{}') => -1, EPERM (path is a directory)", path_owned);
+        log_dbg!(
+            "unlink('{}') => -1, EPERM (path is a directory)",
+            path_owned
+        );
         set_errno(env, EPERM);
         return -1;
     }
@@ -413,7 +416,11 @@ fn link(env: &mut Environment, path1: ConstPtr<u8>, path2: ConstPtr<u8>) -> i32 
         set_errno(env, EACCES);
         return -1;
     }
-    log_dbg!("link('{}', '{}') => 0 (copy emulation)", src_owned, dst_owned);
+    log_dbg!(
+        "link('{}', '{}') => 0 (copy emulation)",
+        src_owned,
+        dst_owned
+    );
     0
 }
 
@@ -428,8 +435,16 @@ fn link(env: &mut Environment, path1: ConstPtr<u8>, path2: ConstPtr<u8>) -> i32 
 /// on a FAT/MS-DOS volume.
 fn symlink(env: &mut Environment, path1: ConstPtr<u8>, path2: ConstPtr<u8>) -> i32 {
     set_errno(env, 0);
-    let src = env.mem.cstr_at_utf8(path1).unwrap_or("<bad utf-8>").to_owned();
-    let dst = env.mem.cstr_at_utf8(path2).unwrap_or("<bad utf-8>").to_owned();
+    let src = env
+        .mem
+        .cstr_at_utf8(path1)
+        .unwrap_or("<bad utf-8>")
+        .to_owned();
+    let dst = env
+        .mem
+        .cstr_at_utf8(path2)
+        .unwrap_or("<bad utf-8>")
+        .to_owned();
     log_dbg!(
         "symlink('{}', '{}') => -1, ENOTSUP (guest fs has no symlinks)",
         src,
@@ -606,7 +621,10 @@ fn syscall(env: &mut Environment, number: i32, _args: DotDotDot) -> i32 {
             (env.current_thread as i32) + 1
         }
         _ => {
-            log!("Warning: syscall({}) unimplemented; returning -1/ENOSYS", number);
+            log!(
+                "Warning: syscall({}) unimplemented; returning -1/ENOSYS",
+                number
+            );
             set_errno(env, ENOSYS);
             -1
         }

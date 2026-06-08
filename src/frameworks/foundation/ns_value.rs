@@ -7,6 +7,7 @@
 
 use super::ns_string::{from_rust_ordering, from_rust_string};
 use super::{_nib_archive_decoder, NSComparisonResult, NSOrderedSame, NSRange, NSUInteger};
+use crate::frameworks::core_animation::ca_transform3d::CATransform3D;
 use crate::frameworks::core_foundation::cf_number::{
     kCFNumberCharType,
     kCFNumberDoubleType, // <-- ИСПРАВЛЕНИЕ: Добавлены наши новые типы
@@ -22,7 +23,6 @@ use crate::frameworks::core_foundation::cf_number::{
     kCFNumberShortType,
     CFNumberType,
 };
-use crate::frameworks::core_animation::ca_transform3d::CATransform3D;
 use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::NSInteger;
 use crate::mem::{ConstPtr, ConstVoidPtr, MutVoidPtr};

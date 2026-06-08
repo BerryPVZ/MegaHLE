@@ -173,10 +173,22 @@ fn glGetError(env: &mut Environment) -> GLenum {
             use std::sync::atomic::{AtomicU32, Ordering};
             const MAX_REPORTED: usize = 16;
             static REPORTED: [AtomicU32; MAX_REPORTED] = [
-                AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
-                AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
-                AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
-                AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
             ];
             let mut already_seen = false;
             for slot in &REPORTED {
@@ -514,6 +526,39 @@ fn glScissor(env: &mut Environment, x: GLint, y: GLint, width: GLsizei, height: 
     })
 }
 fn glViewport(env: &mut Environment, x: GLint, y: GLint, width: GLsizei, height: GLsizei) {
+    // MegaHLE direct Minion Jump / SheepEscape viewport fix.
+    // The app is iPad landscape, but the current path hands GL portrait 768x1024.
+    let (x, y, width, height) = if env.bundle.bundle_identifier_opt()
+        == Some("com.apprisetec9.minionjump")
+        && x == 0
+        && y == 0
+        && width == 768
+        && height == 1024
+    {
+        println!("MegaHLE: Minion Jump viewport swap 768x1024 -> 1024x768");
+        (0, 0, 1024, 768)
+    } else {
+        (x, y, width, height)
+    };
+
+    // MegaHLE Minion Jump / SheepEscape iPad landscape viewport fix.
+    //
+    // In iPad landscape mode this app should render to 1024x768, but the
+    // current orientation path can hand GL a portrait 768x1024 viewport.
+    // Swap only that exact case, and only when the Minion Jump screen profile
+    // is active.
+    let (x, y, width, height) = if std::env::var_os("TOUCHHLE_FORCE_IPAD_LANDSCAPE_SCREEN")
+        .is_some()
+        && x == 0
+        && y == 0
+        && width == 768
+        && height == 1024
+    {
+        (0, 0, 1024, 768)
+    } else {
+        (x, y, width, height)
+    };
+
     {
         use std::sync::atomic::{AtomicBool, Ordering};
         static SEEN: AtomicBool = AtomicBool::new(false);
@@ -887,12 +932,7 @@ fn glGetTexParameterxv(
         unsafe { gles.GetTexParameterxv(target, pname, params) }
     })
 }
-fn glGetTexEnvxv(
-    env: &mut Environment,
-    target: GLenum,
-    pname: GLenum,
-    params: MutPtr<GLfixed>,
-) {
+fn glGetTexEnvxv(env: &mut Environment, target: GLenum, pname: GLenum, params: MutPtr<GLfixed>) {
     with_ctx_and_mem(env, |gles, mem| {
         let params = mem.ptr_at_mut(params, 16);
         unsafe { gles.GetTexEnvxv(target, pname, params) }
@@ -922,23 +962,13 @@ fn glGetLightxv(env: &mut Environment, light: GLenum, pname: GLenum, params: Mut
         unsafe { gles.GetLightxv(light, pname, params) }
     })
 }
-fn glGetMaterialfv(
-    env: &mut Environment,
-    face: GLenum,
-    pname: GLenum,
-    params: MutPtr<GLfloat>,
-) {
+fn glGetMaterialfv(env: &mut Environment, face: GLenum, pname: GLenum, params: MutPtr<GLfloat>) {
     with_ctx_and_mem(env, |gles, mem| {
         let params = mem.ptr_at_mut(params, 4);
         unsafe { gles.GetMaterialfv(face, pname, params) }
     })
 }
-fn glGetMaterialxv(
-    env: &mut Environment,
-    face: GLenum,
-    pname: GLenum,
-    params: MutPtr<GLfixed>,
-) {
+fn glGetMaterialxv(env: &mut Environment, face: GLenum, pname: GLenum, params: MutPtr<GLfixed>) {
     with_ctx_and_mem(env, |gles, mem| {
         let params = mem.ptr_at_mut(params, 4);
         unsafe { gles.GetMaterialxv(face, pname, params) }
@@ -979,14 +1009,7 @@ fn glDrawTexfOES(
         gles.DrawTexfOES(x, y, z, width, height)
     })
 }
-fn glDrawTexiOES(
-    env: &mut Environment,
-    x: GLint,
-    y: GLint,
-    z: GLint,
-    width: GLint,
-    height: GLint,
-) {
+fn glDrawTexiOES(env: &mut Environment, x: GLint, y: GLint, z: GLint, width: GLint, height: GLint) {
     with_ctx_and_mem(env, |gles, _mem| unsafe {
         gles.DrawTexiOES(x, y, z, width, height)
     })
@@ -1021,14 +1044,7 @@ fn glDrawTexxvOES(env: &mut Environment, coords: ConstPtr<GLfixed>) {
         unsafe { gles.DrawTexxvOES(coords) }
     })
 }
-fn glDrawTexsOES(
-    env: &mut Environment,
-    x: i16,
-    y: i16,
-    z: i16,
-    width: i16,
-    height: i16,
-) {
+fn glDrawTexsOES(env: &mut Environment, x: i16, y: i16, z: i16, width: i16, height: i16) {
     with_ctx_and_mem(env, |gles, _mem| unsafe {
         gles.DrawTexsOES(x, y, z, width, height)
     })
@@ -1079,11 +1095,7 @@ fn glDiscardFramebufferEXT(
 
 /// `glPushGroupMarkerEXT` — debug marker from `GL_EXT_debug_marker`.
 /// No-op on hosts that don't expose the extension.
-fn glPushGroupMarkerEXT(
-    _env: &mut Environment,
-    _length: GLsizei,
-    _marker: ConstPtr<u8>,
-) {
+fn glPushGroupMarkerEXT(_env: &mut Environment, _length: GLsizei, _marker: ConstPtr<u8>) {
     // Debug markers are hints; safe to ignore.
 }
 
@@ -1214,7 +1226,8 @@ unsafe fn guard_client_vertex_arrays(gles: &mut dyn GLES, mem: &Mem) -> Vec<GLui
             "Warning: disabling enabled vertex attribute array #{} for this draw: \
              no buffer is bound and its client pointer {:?} is outside guest memory \
              (would crash the host GL driver)",
-            index, ptr
+            index,
+            ptr
         );
         gles.DisableVertexAttribArray(index);
         disabled.push(index);
@@ -1840,8 +1853,14 @@ fn glCompressedTexImage2D(
             // slot per "ever seen" entry; cap at 8 distinct entries.
             const MAX_REPORTED: usize = 8;
             static REPORTED: [AtomicU64; MAX_REPORTED] = [
-                AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
-                AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
             ];
             let key: u64 = ((internalformat as u64) << 32) | (post_err as u64);
             let mut already_seen = false;
@@ -3119,7 +3138,9 @@ fn glGetActiveUniformBlockName(
         );
     });
     let n = (host_length.max(0) as usize).min(cap);
-    let dst = env.mem.bytes_at_mut(uniform_block_name.cast(), n as GuestUSize);
+    let dst = env
+        .mem
+        .bytes_at_mut(uniform_block_name.cast(), n as GuestUSize);
     dst.copy_from_slice(&name_buf[..n]);
     if !length.is_null() {
         env.mem.write(length, host_length);
@@ -3331,16 +3352,18 @@ fn glMapBufferRange(
     let guest_buf: MutPtr<GLvoid> = env.mem.alloc(length as GuestUSize).cast();
     unsafe {
         let host_slice = from_raw_parts(host_ptr as *const u8, length as usize);
-        let guest_slice = env
-            .mem
-            .bytes_at_mut(guest_buf.cast(), length as GuestUSize);
+        let guest_slice = env.mem.bytes_at_mut(guest_buf.cast(), length as GuestUSize);
         guest_slice.copy_from_slice(host_slice);
     }
-    let current_ctx: Option<crate::objc::id> =
-        *env.framework_state.opengles.current_ctx_for_thread(env.current_thread);
+    let current_ctx: Option<crate::objc::id> = *env
+        .framework_state
+        .opengles
+        .current_ctx_for_thread(env.current_thread);
     if let Some(ctx) = current_ctx {
         let host_obj = env.objc.borrow_mut::<EAGLContextHostObject>(ctx);
-        host_obj.mapped_buffers.insert(target, (guest_buf, host_ptr));
+        host_obj
+            .mapped_buffers
+            .insert(target, (guest_buf, host_ptr));
     }
     guest_buf.cast()
 }
@@ -3353,8 +3376,10 @@ fn glFlushMappedBufferRange(
 ) {
     // Copy the relevant slice of the guest-visible buffer back to the
     // host-mapped buffer so the driver sees the writes.
-    let current_ctx: Option<crate::objc::id> =
-        *env.framework_state.opengles.current_ctx_for_thread(env.current_thread);
+    let current_ctx: Option<crate::objc::id> = *env
+        .framework_state
+        .opengles
+        .current_ctx_for_thread(env.current_thread);
     if let Some(ctx) = current_ctx {
         let mapping = env
             .objc
@@ -3669,8 +3694,7 @@ fn glTexImage3D(
         let host_pixels: *const GLvoid = if buf != 0 || pixels.is_null() {
             pixels.cast::<u8>().to_bits() as usize as *const GLvoid
         } else {
-            let total =
-                (width as GuestUSize) * (height as GuestUSize) * (depth as GuestUSize) * 4;
+            let total = (width as GuestUSize) * (height as GuestUSize) * (depth as GuestUSize) * 4;
             mem.bytes_at(pixels.cast(), total).as_ptr().cast()
         };
         gles.TexImage3D(
@@ -3710,8 +3734,7 @@ fn glTexSubImage3D(
         let host_pixels: *const GLvoid = if buf != 0 || pixels.is_null() {
             pixels.cast::<u8>().to_bits() as usize as *const GLvoid
         } else {
-            let total =
-                (width as GuestUSize) * (height as GuestUSize) * (depth as GuestUSize) * 4;
+            let total = (width as GuestUSize) * (height as GuestUSize) * (depth as GuestUSize) * 4;
             mem.bytes_at(pixels.cast(), total).as_ptr().cast()
         };
         gles.TexSubImage3D(
@@ -3838,9 +3861,7 @@ fn glIsSampler(env: &mut Environment, sampler: GLuint) -> GLboolean {
 }
 
 fn glBindSampler(env: &mut Environment, unit: GLuint, sampler: GLuint) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe {
-        gles.BindSampler(unit, sampler)
-    });
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.BindSampler(unit, sampler) });
 }
 
 fn glSamplerParameteri(env: &mut Environment, sampler: GLuint, pname: GLenum, param: GLint) {
@@ -3891,15 +3912,11 @@ fn glIsTransformFeedback(env: &mut Environment, id: GLuint) -> GLboolean {
 }
 
 fn glPauseTransformFeedback(env: &mut Environment) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe {
-        gles.PauseTransformFeedback()
-    });
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.PauseTransformFeedback() });
 }
 
 fn glResumeTransformFeedback(env: &mut Environment) {
-    with_ctx_and_mem(env, |gles, _mem| unsafe {
-        gles.ResumeTransformFeedback()
-    });
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.ResumeTransformFeedback() });
 }
 
 // -- Integer vertex attributes --
@@ -3922,14 +3939,7 @@ fn glVertexAttribIPointer(
     });
 }
 
-fn glVertexAttribI4i(
-    env: &mut Environment,
-    index: GLuint,
-    x: GLint,
-    y: GLint,
-    z: GLint,
-    w: GLint,
-) {
+fn glVertexAttribI4i(env: &mut Environment, index: GLuint, x: GLint, y: GLint, z: GLint, w: GLint) {
     with_ctx_and_mem(env, |gles, _mem| unsafe {
         gles.VertexAttribI4i(index, x, y, z, w)
     });
@@ -3969,7 +3979,15 @@ fn glCompressedTexImage3D(
                 .cast()
         };
         gles.CompressedTexImage3D(
-            target, level, internalformat, width, height, depth, border, image_size, data,
+            target,
+            level,
+            internalformat,
+            width,
+            height,
+            depth,
+            border,
+            image_size,
+            data,
         )
     });
 }
@@ -4108,7 +4126,9 @@ fn glVertexAttribI4iv(env: &mut Environment, index: GLuint, v: ConstPtr<GLint>) 
 
 fn glVertexAttribI4uiv(env: &mut Environment, index: GLuint, v: ConstPtr<GLuint>) {
     let v = env.mem.ptr_at(v, 4);
-    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.VertexAttribI4uiv(index, v) });
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.VertexAttribI4uiv(index, v)
+    });
 }
 
 fn glGetVertexAttribIiv(
@@ -4307,7 +4327,6 @@ fn glGetBufferPointerv(
     env.mem.write(params, Ptr::null());
 }
 
-
 // -- Integer uniforms --
 fn glUniform1ui(env: &mut Environment, location: GLint, v0: GLuint) {
     with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Uniform1ui(location, v0) });
@@ -4338,48 +4357,28 @@ fn glUniform4ui(
     });
 }
 
-fn glUniform1uiv(
-    env: &mut Environment,
-    location: GLint,
-    count: GLsizei,
-    value: ConstPtr<GLuint>,
-) {
+fn glUniform1uiv(env: &mut Environment, location: GLint, count: GLsizei, value: ConstPtr<GLuint>) {
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let slice = mem.bytes_at(value.cast(), (count as GuestUSize) * 4);
         gles.Uniform1uiv(location, count, slice.as_ptr().cast())
     });
 }
 
-fn glUniform2uiv(
-    env: &mut Environment,
-    location: GLint,
-    count: GLsizei,
-    value: ConstPtr<GLuint>,
-) {
+fn glUniform2uiv(env: &mut Environment, location: GLint, count: GLsizei, value: ConstPtr<GLuint>) {
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let slice = mem.bytes_at(value.cast(), (count as GuestUSize) * 8);
         gles.Uniform2uiv(location, count, slice.as_ptr().cast())
     });
 }
 
-fn glUniform3uiv(
-    env: &mut Environment,
-    location: GLint,
-    count: GLsizei,
-    value: ConstPtr<GLuint>,
-) {
+fn glUniform3uiv(env: &mut Environment, location: GLint, count: GLsizei, value: ConstPtr<GLuint>) {
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let slice = mem.bytes_at(value.cast(), (count as GuestUSize) * 12);
         gles.Uniform3uiv(location, count, slice.as_ptr().cast())
     });
 }
 
-fn glUniform4uiv(
-    env: &mut Environment,
-    location: GLint,
-    count: GLsizei,
-    value: ConstPtr<GLuint>,
-) {
+fn glUniform4uiv(env: &mut Environment, location: GLint, count: GLsizei, value: ConstPtr<GLuint>) {
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let slice = mem.bytes_at(value.cast(), (count as GuestUSize) * 16);
         gles.Uniform4uiv(location, count, slice.as_ptr().cast())
@@ -4547,8 +4546,7 @@ fn glGetStringi(env: &mut Environment, name: GLenum, index: GLuint) -> ConstPtr<
     }
     // Copy the C string into guest memory once and intern the pointer in
     // EAGL's per-context string cache.
-    let bytes = unsafe { std::ffi::CStr::from_ptr(host_ptr as *const _) }
-        .to_bytes_with_nul();
+    let bytes = unsafe { std::ffi::CStr::from_ptr(host_ptr as *const _) }.to_bytes_with_nul();
     let guest_buf: MutPtr<u8> = env.mem.alloc(bytes.len() as GuestUSize).cast();
     env.mem
         .bytes_at_mut(guest_buf, bytes.len() as GuestUSize)
@@ -4556,11 +4554,7 @@ fn glGetStringi(env: &mut Environment, name: GLenum, index: GLuint) -> ConstPtr<
     guest_buf.cast_const()
 }
 
-fn glGetFragDataLocation(
-    env: &mut Environment,
-    program: GLuint,
-    name: ConstPtr<u8>,
-) -> GLint {
+fn glGetFragDataLocation(env: &mut Environment, program: GLuint, name: ConstPtr<u8>) -> GLint {
     with_ctx_and_mem(env, |gles, mem| unsafe {
         let name_cstr = mem.cstr_at(name);
         let name_c = std::ffi::CString::new(name_cstr).unwrap();
@@ -4596,7 +4590,6 @@ unsafe fn restore_fog_state_values(gles: &mut dyn GLES, from_backup: Option<(f32
         gles.Fogf(gles11::FOG_END, fog_end);
     }
 }
-
 
 /// `void glLabelObjectEXT(GLenum type, GLuint object, GLsizei length, const GLchar *label)`
 ///

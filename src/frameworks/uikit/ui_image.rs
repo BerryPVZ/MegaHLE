@@ -13,11 +13,11 @@ use crate::frameworks::foundation::{ns_data, ns_string, NSInteger};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
 use crate::fs::GuestPath;
 use crate::image::Image;
-use crate::objc::{
-    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports,
-    HostObject, NSZonePtr, SEL,
-};
 use crate::mem::MutVoidPtr;
+use crate::objc::{
+    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
+    NSZonePtr, SEL,
+};
 use crate::Environment;
 use std::collections::HashMap;
 
@@ -431,14 +431,17 @@ fn UIImageWriteToSavedPhotosAlbum(
                 Ok(()) => {
                     log!(
                         "UIImageWriteToSavedPhotosAlbum: saved {}x{} image to {}",
-                        w, h, docs_path
+                        w,
+                        h,
+                        docs_path
                     );
                     true
                 }
                 Err(e) => {
                     log!(
                         "UIImageWriteToSavedPhotosAlbum: failed to write {}: {:?}",
-                        docs_path, e
+                        docs_path,
+                        e
                     );
                     false
                 }

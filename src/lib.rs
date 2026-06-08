@@ -218,6 +218,22 @@ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
     };
 
     let app_id = bundle.bundle_identifier();
+
+    // MegaHLE: Minion Jump / SheepEscape needs true iPad landscape window
+    // sizing before UIKit/CCGLView is created.
+    unsafe {
+        std::env::remove_var("TOUCHHLE_MINIONJUMP_IPAD_LANDSCAPE_WINDOW");
+        std::env::remove_var("TOUCHHLE_FORCE_IPAD_DEVICE_IDENTITY");
+        std::env::remove_var("TOUCHHLE_FORCE_IPAD_LANDSCAPE_SCREEN");
+    }
+
+    if app_id == "com.apprisetec9.minionjump" {
+        unsafe {
+            std::env::set_var("TOUCHHLE_MINIONJUMP_IPAD_LANDSCAPE_WINDOW", "1");
+            std::env::set_var("TOUCHHLE_FORCE_IPAD_DEVICE_IDENTITY", "1");
+            std::env::set_var("TOUCHHLE_FORCE_IPAD_LANDSCAPE_SCREEN", "1");
+        }
+    }
     let minimum_os_version = bundle.minimum_os_version();
     let required_device_capabilities = bundle.required_device_capabilities();
     let device_family = bundle.device_family_array();
@@ -271,9 +287,7 @@ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
         // itself tolerates malformed plists.
         let (major_str, minor_str) = match version.split_once('.') {
             Some((maj, rest)) => {
-                let minor_str = rest
-                    .split_once('.')
-                    .map_or(rest, |(minor, _patch)| minor);
+                let minor_str = rest.split_once('.').map_or(rest, |(minor, _patch)| minor);
                 (maj, minor_str)
             }
             None => (version, "0"),

@@ -281,9 +281,9 @@ impl Environment {
         // launch logic uses portrait by default whenever it's listed, so
         // mirror that.
         let portrait_supported = bundle
-            .supported_interface_orientations().contains(&"UIInterfaceOrientationPortrait");
-        if options.initial_orientation == window::DeviceOrientation::Portrait
-            && !portrait_supported
+            .supported_interface_orientations()
+            .contains(&"UIInterfaceOrientationPortrait");
+        if options.initial_orientation == window::DeviceOrientation::Portrait && !portrait_supported
         {
             if let Some(&non_portrait_orientation) = bundle
                 .supported_interface_orientations()

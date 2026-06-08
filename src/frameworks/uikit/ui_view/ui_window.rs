@@ -22,7 +22,9 @@ use crate::frameworks::uikit::ui_application::{
 use crate::frameworks::uikit::ui_device::{
     UIDeviceOrientationLandscapeLeft, UIDeviceOrientationLandscapeRight,
 };
-use crate::objc::{id, msg, msg_class, msg_super, nil, objc_classes, release, retain, ClassExports};
+use crate::objc::{
+    id, msg, msg_class, msg_super, nil, objc_classes, release, retain, ClassExports,
+};
 use std::collections::HashMap;
 
 #[derive(Default)]
